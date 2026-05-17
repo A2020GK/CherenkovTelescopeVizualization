@@ -1,105 +1,112 @@
 # CherenkovTelescopeVizualization
 
-PyQt6-based visualization tool for the HiSCORE Cherenkov telescope array. The app renders the station layout, lists events from an event file, and opens per‑station waveform views when you click a station.
+Инструмент визуализации массива черенковских телескопов HiSCORE на базе PyQt6. Приложение отображает расположение станций, список событий из файла событий и открывает окно с осциллограммами станции при клике.
 
-## Repository layout
+## Структура репозитория
 
-- `HiSCORE/hiscore.py` — main application entry point (GUI).
-- `HiSCORE/c.dat` — station geometry used to position buttons.
-- `HiSCORE/hiconfig.ini` — persisted UI settings and last opened paths.
-- `HiSCORE/Data/` — sample data (`hiscore.draw`, `hiscore.test`, `station_XX.dat`).
-- `HiSCORE/requirements.txt` — Python dependencies.
+- `HiSCORE/hiscore.py` — главный GUI.
+- `HiSCORE/c.dat` — геометрия станций (координаты).
+- `HiSCORE/hiconfig.ini` — сохранённые настройки и последние пути.
+- `HiSCORE/Data/` — пример данных (`hiscore.draw`, `hiscore.test`, `station_XX.dat`).
+- `HiSCORE/requirements.txt` — зависимости Python.
+- `HiSCORE/start_hisc.bat` — запуск под Windows.
 
-## Setup & run
+## Запуск
 
-From the `HiSCORE/` directory:
+Из каталога `HiSCORE/`:
 
-1. (Optional) Create and activate a virtual environment.
-2. Install system dependency: `libxcb-cursor0` (required by PyQt on Linux).
-3. Install Python dependencies: `pip install -r requirements.txt`
-4. Run: `python3 hiscore.py`
+1. (Опционально) создайте и активируйте виртуальное окружение.
+2. Установите системную зависимость `libxcb-cursor0` (требуется PyQt6 на Linux).
+3. Установите зависимости: `pip install -r requirements.txt`
+4. Запустите: `python3 hiscore.py`
 
-The app can open a data directory and an event list file via **File → Open Directory** and **File → Open file**. The last used paths are stored in `hiconfig.ini`.
+Данные выбираются через меню **File → Open Directory** (каталог станций) и **File → Open file** (файл событий). Последние пути сохраняются в `hiconfig.ini`.
 
-## How the app uses data
+## Формат данных и использование в приложении
 
-The UI is data‑driven. The station geometry determines where buttons appear. The event list file determines which stations are active for a given event and the numeric value used for coloring. Per‑station waveform files provide the detailed signals shown in the station window.
+### 1) Геометрия станций (`c.dat`)
 
-### 1) Station geometry (`c.dat`)
+**Формат:** пробельные разделители, без заголовка.  
+**Колонки (по порядку):**
 
-**Format:** whitespace‑separated, no header.  
-**Columns (in order):**
+1. `ch` — идентификатор станции/канала.
+2. `x` — координата X.
+3. `y` — координата Y.
+4. `z` — координата Z (в коде не используется при отрисовке).
 
-1. `ch` — station/channel ID.
-2. `x` — X coordinate.
-3. `y` — Y coordinate.
-4. `z` — Z coordinate (stored but not used in plotting).
+**Как используется в коде:**
 
-**Usage in code:**
+- Каждая строка создаёт кнопку станции.
+- Для размещения на схеме `x` и `y` масштабируются и переставляются местами с изменением знака; из‑за этого схема может быть зеркальной относительно исходных координат.
+- `ch` определяет «группу SiPM»:
+  - `< 100` → группа 1
+  - `< 200` → группа 2
+  - `< 300` → группа 3
+  - `>= 300` → группа 4
 
-- Each row becomes a station button.
-- Button placement uses `x` and `y` (internally swapped and negated).
-- `ch` determines the “SiPM group”:
-  - `< 100` → group 1
-  - `< 200` → group 2
-  - `< 300` → group 3
-  - `>= 300` → group 4
+### 2) Файл событий (`.draw` / `.test`)
 
-### 2) Event list file (`.draw` / `.test`)
+**Выбор файла:** **File → Open file** или `hiconfig.ini` (`Set_path.filename`).  
+**Формат:** последовательность блоков событий.
 
-**Selected via:** **File → Open file** or `hiconfig.ini` (`Set_path.filename`).  
-**Format:** a sequence of event blocks.
+**Важно:** строка‑заголовок блока **не должна начинаться с пробела** (иначе приложение не распознает её как заголовок).
 
-Each block begins with a **header line** (no leading spaces) containing a single integer `N` — the number of station records for that event. The next `N` lines (usually indented) are the station records.
+**Структура блока:**
 
-**Station record fields (0‑based index):**
+- **Заголовок** — одна строка с целым числом `N` (количество записей станций в событии).
+- Далее идут **`N` строк записей станций** (обычно с отступом/пробелом в начале).
 
-0. `station_id` — matches `c.dat` `ch` and the station file name (`station_XX.dat`).
-1. `station_event_id` — event ID used to locate the event inside the station file.
-2. `event_time` — displayed in the event table.
-3. `field3` — present but unused by the app.
-4. `field4` — present but unused by the app.
-5. `value` — numeric value used for station coloring and text.
+**Поля записи станции (0‑based):**
 
-**Usage in code:**
+0. `station_id` — ID станции; должен совпадать с `c.dat` (`ch`) и именем файла `station_XX.dat`.
+1. `station_event_id` — ID события внутри файла станции.
+2. `event_time` — строка времени, отображается в таблице событий.
+3. `field3` — присутствует, но не используется.
+4. `field4` — присутствует, но не используется.
+5. `value` — числовое значение для раскраски и подписи кнопки станции.
 
-- The event table columns **st / st_event / st_time** are populated from fields 0–2.
-- Field 5 (`value`) drives button color and the numeric label shown on the station.
-- The event count determines the contents of the event selector combobox.
+**Как используется в коде:**
 
-### 3) Station waveform files (`station_XX.dat`)
+- Колонки таблицы **st / st_event / st_time** заполняются из полей 0–2.
+- Поле 5 (`value`) определяет цвет и вторую строку текста на кнопке станции.
+- Количество блоков определяет список событий в выпадающем меню (события нумеруются по порядку 1..N, а не по ID).
 
-**Selected via:** **File → Open Directory** or `hiconfig.ini` (`Set_path.directory`).  
-**Naming:** `station_01.dat`, `station_02.dat`, …  
-**Format:** whitespace‑separated, **401 columns**, no header. Columns are named `"0"`…`"400"` in the code.
+### 3) Файлы сигналов станций (`station_XX.dat`)
 
-Each event occupies **10 consecutive rows**:
+**Каталог:** **File → Open Directory** или `hiconfig.ini` (`Set_path.directory`).  
+**Имена файлов:** `station_{id:02d}.dat` (для ID < 100 используются 2 цифры, для больших — полное число).  
+**Формат:** пробельные разделители, без заголовка.  
+**Чтение в коде:** ожидаются 401 колонки с именами `"0"`…`"400"`.
 
-1. **Event header row** (column `0` is a numeric event ID).
-2. 9 **signal rows** with labels in column `0`:
-   - `a1`, `a2`, `a3`, `a4` — anode signals
-   - `d1`, `d2`, `d3`, `d4` — diode signals
-   - `tr1` — trigger/aux signal
+**Структура события внутри файла станции: 10 подряд идущих строк**
 
-**Event header columns (0‑based):**
+1. **Строка заголовка события** — должна начинаться с цифры (без ведущих пробелов).  
+   Поля (0‑based):
+   - `0` — `event_id` (сравнивается с `station_event_id` из файла событий).
+   - `1` — `timestamp` (показывается в заголовке окна).
+   - `2` — `field2` (не используется).
+   - `3` — `field3` (не используется).
+   - `4` — `min` (начало шкалы времени).
+   - `5` — `dlin` (длина шкалы времени).
 
-0. `event_id` — matched against `station_event_id` from the event list file.
-1. `timestamp` — shown in the station window title.
-2. `field2` — unused.
-3. `field3` — unused.
-4. `min` — start time index for plotting.
-5. `dlin` — signal length (used to compute the X‑axis range).
-6–400 — unused for the header row.
+2. **9 строк сигналов в фиксированном порядке:**
+   - `a1`, `a2`, `a3`, `a4` — анодные сигналы
+   - `d1`, `d2`, `d3`, `d4` — диодные сигналы
+   - `tr` — триггер/вспомогательный сигнал  
 
-**Signal rows:**
+   Первая колонка — метка (`a1`, `d1`, `tr` и т.д.), колонки `1..400` — 400 целочисленных отсчётов.  
+   **Внимание:** приложение не проверяет текст метки, оно использует порядок строк. Если порядок нарушен, графики будут неверными.
 
-- Column `0` is the label (`a1`, `a2`, …).
-- Columns `1..400` are integer samples (400 points).
-- The app plots samples on the X‑axis `range(min, min + dlin)` and lets you trim the view with spin boxes.
+**Как используется в коде:**
 
-### 4) Configuration (`hiconfig.ini`)
+- Приложение ищет строку, где **первый символ — цифра** и `event_id` совпадает с `station_event_id`.
+- `min` и `dlin` задают ось X для графиков: `range(min, min + dlin)`.  
+  Спин‑боксы позволяют дополнительно ограничить диапазон.
+- Отрисовываются три графика: аноды (`a1..a4`), диоды (`d1..d4`) и триггер (`tr`).
 
-The app reads settings from `hiconfig.ini` at startup. The most important section for data loading is:
+### 4) Конфигурация (`hiconfig.ini`)
+
+Файл читается при старте. Для загрузки данных важна секция:
 
 ```
 [Set_path]
@@ -107,14 +114,15 @@ directory = /path/to/station/files
 filename = /path/to/event/list/file
 ```
 
-If these paths exist, the app auto‑loads them on launch. Other sections control layout and UI defaults.
+Если пути существуют, приложение автоматически загружает их при запуске; иначе показывает ошибку.
 
-## UI behavior (high‑level)
+## Поведение интерфейса
 
-- **Main window** shows the station layout and an event selector.
-- **Event selector** moves through event blocks defined in the event list file.
-- **Station buttons** show the station ID and the value from the event list record; color is based on the same value.
-- **Clicking a station** opens a station window with three plots:
-  - Anode (`a1`–`a4`)
-  - Diode (`d1`–`d4`)
-  - Trigger (`tr1`)
+- **Главное окно** показывает схему станций и таблицу текущего события.
+- **Выбор события** переключает блоки из файла событий по порядковому номеру.
+- **Кнопки станций** активны только для станций, присутствующих в текущем событии; на них отображаются ID и `value`.
+- **Клик по станции** открывает окно сигналов, если:
+  - выбран файл событий,
+  - выбрана директория станций,
+  - существует `station_XX.dat`,
+  - в нём найдено событие с нужным `event_id`.
